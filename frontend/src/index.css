@@ -1,0 +1,102 @@
+@import "@heroui/styles";
+@source "../node_modules/@heroui/react/dist";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-ink-950: #0a0a0f;
+  --color-ink-900: #10101a;
+  --color-ink-800: #181826;
+  --color-accent: #ff3d6e;
+  --color-accent-50: #fff0f4;
+  --color-accent-400: #ff6f91;
+  --color-accent-600: #e91e54;
+
+  --animate-wiggle: wiggle 0.4s ease-in-out infinite;
+  --animate-slide-up: slideUp 280ms ease-out;
+  --animate-fly: flyAcross 1.2s ease-in-out forwards;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-1deg); }
+  50% { transform: rotate(1deg); }
+}
+@keyframes slideUp {
+  0% { transform: translateY(120%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes flyAcross {
+  0% { transform: translateX(-30%); }
+  100% { transform: translateX(130%); }
+}
+
+:root {
+  --page-padding: 16px;
+  --bottom-safe: env(safe-area-inset-bottom);
+  --top-safe: env(safe-area-inset-top);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, Inter, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+.app {
+  min-height: 100dvh;
+  padding-top: max(16px, var(--top-safe));
+  padding-bottom: max(16px, var(--bottom-safe));
+  display: flex;
+  flex-direction: column;
+}
+
+.quiz-container {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding-left: var(--page-padding);
+  padding-right: var(--page-padding);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .landscape-blocker {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.96);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    font-size: 18px;
+  }
+}
+
+@media not all and (orientation: landscape) {
+  .landscape-blocker {
+    display: none;
+  }
+}

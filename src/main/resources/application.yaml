@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: hb-site
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/hbsite
+    username: hbsite
+    password: hbsite
+    pool:
+      initial-size: 2
+      max-size: 10
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://localhost:5432/hbsite
+    user: hbsite
+    password: hbsite
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
+
+quiz:
+  default-question-duration-seconds: 30
+  warning-seconds-before-end: 10
+  auto-mode-pause-seconds: 7
+  manual-mode: true
+  default-quiz-slug: hb-default-quiz-vanya
+
+logging:
+  level:
+    org.springframework.r2dbc: INFO
+    com.example.hbsite: DEBUG
