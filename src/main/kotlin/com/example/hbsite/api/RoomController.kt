@@ -5,11 +5,7 @@ import com.example.hbsite.repo.OptionRepository
 import com.example.hbsite.repo.QuestionRepository
 import com.example.hbsite.service.RoomService
 import com.example.hbsite.service.StatsService
-import com.example.hbsite.ws.EventTypes
 import com.example.hbsite.ws.PlayerDto
-import com.example.hbsite.ws.PlayerJoinedPayload
-import com.example.hbsite.ws.RoomEventBus
-import com.example.hbsite.ws.WsEnvelope
 import kotlinx.coroutines.flow.toList
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -29,7 +25,6 @@ class RoomController(
     private val questions: QuestionRepository,
     private val options: OptionRepository,
     private val answers: AnswerRepository,
-    private val bus: RoomEventBus,
 ) {
     @PostMapping
     suspend fun create(exchange: ServerWebExchange): ResponseEntity<CreateRoomResponse> {
@@ -51,7 +46,9 @@ class RoomController(
     }
 
     @GetMapping("/{code}")
-    suspend fun get(@PathVariable code: String): RoomInfoResponse {
+    suspend fun get(
+        @PathVariable code: String,
+    ): RoomInfoResponse {
         val room = roomService.findRoomByCode(code)
         val players = roomService.listPlayers(room.id!!).map { PlayerDto(it.id!!, it.name, it.score) }
         val total = questions.countByQuizId(room.quizId).toInt()
@@ -76,30 +73,22 @@ class RoomController(
         @RequestBody body: JoinRoomRequest,
     ): JoinRoomResponse {
         val joined = roomService.joinRoom(code, body.name, body.sessionId)
-        val player = PlayerDto(joined.player.id!!, joined.player.name, joined.player.score)
-        if (!joined.isReconnect) {
-            val all = roomService.listPlayers(joined.room.id!!).map { PlayerDto(it.id!!, it.name, it.score) }
-            bus.emit(
-                joined.room.id,
-                WsEnvelope(
-                    EventTypes.PLAYER_JOINED,
-                    PlayerJoinedPayload(roomId = joined.room.id, player = player, players = all),
-                ),
-            )
-        }
         return JoinRoomResponse(
             roomId = joined.room.id!!,
-            player = player,
+            player = PlayerDto(joined.player.id!!, joined.player.name, joined.player.score),
             isReconnect = joined.isReconnect,
         )
     }
 
     @GetMapping("/{code}/results")
-    suspend fun results(@PathVariable code: String) =
-        statsService.buildFinalRanking(roomService.findRoomByCode(code))
+    suspend fun results(
+        @PathVariable code: String,
+    ) = statsService.buildFinalRanking(roomService.findRoomByCode(code))
 
     @GetMapping("/{code}/stats")
-    suspend fun stats(@PathVariable code: String): StatsResponse {
+    suspend fun stats(
+        @PathVariable code: String,
+    ): StatsResponse {
         val room = roomService.findRoomByCode(code)
         val qs = questions.findAllByQuizIdOrderByOrderNumberAsc(room.quizId).toList()
         val opts = options.findAllByQuestionIds(qs.mapNotNull { it.id }).toList().groupBy { it.questionId }

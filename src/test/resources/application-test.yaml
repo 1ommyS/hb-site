@@ -1,0 +1,22 @@
+quiz:
+  default-question-duration-seconds: 2
+  warning-seconds-before-end: 0
+  auto-mode-pause-seconds: 1
+  manual-mode: true
+  default-quiz-slug: hb-default-quiz-vanya
+
+spring:
+  data:
+    redis:
+      repositories:
+        enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+
+logging:
+  level:
+    org.springframework.r2dbc: WARN
+    org.testcontainers: INFO
+    com.example.hbsite: DEBUG

@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1-init
+      author: hb-site
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/01_init.sql
+            splitStatements: true
+            stripComments: false
+            relativeToChangelogFile: false
+
+  - changeSet:
+      id: 2-seed-quiz
+      author: hb-site
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/02_seed_quiz.sql
+            # plpgsql-функция с $$ — нельзя сплитить по ';'
+            splitStatements: false
+            stripComments: false
+            relativeToChangelogFile: false

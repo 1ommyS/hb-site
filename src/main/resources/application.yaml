@@ -8,13 +8,15 @@ spring:
     pool:
       initial-size: 2
       max-size: 10
-  flyway:
-    enabled: true
+  # JDBC DataSource нужен только для Liquibase — рантайм ходит через R2DBC выше.
+  datasource:
     url: jdbc:postgresql://localhost:5432/hbsite
-    user: hbsite
+    username: hbsite
     password: hbsite
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+    driver-class-name: org.postgresql.Driver
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
   data:
     redis:
       host: localhost

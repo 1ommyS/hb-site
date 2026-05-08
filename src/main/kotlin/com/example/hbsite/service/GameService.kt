@@ -12,16 +12,19 @@ import com.example.hbsite.repo.PlayerRepository
 import com.example.hbsite.repo.QuestionRepository
 import com.example.hbsite.repo.RoomRepository
 import com.example.hbsite.ws.EventTypes
+import com.example.hbsite.ws.OptionDto
 import com.example.hbsite.ws.QuestionFinishedPayload
 import com.example.hbsite.ws.QuestionStartedPayload
 import com.example.hbsite.ws.QuizStartedPayload
 import com.example.hbsite.ws.RoomEventBus
 import com.example.hbsite.ws.WsEnvelope
-import com.example.hbsite.ws.OptionDto
+import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -40,6 +43,14 @@ data class AnswerOutcome(
     val acceptedAt: Instant? = null,
 )
 
+/**
+ * Состояние игры в памяти + конечный автомат переходов.
+ *
+ * Все мутации статуса комнаты сериализуются через `RuntimeState.mutex`,
+ * корутины-таймеры держим в той же структуре, чтобы атомарно отменять при
+ * любом досрочном переходе. После `QUIZ_FINISHED` — грейс [QuizProperties.finishedRoomGraceSeconds],
+ * затем eviction state-а и закрытие шины.
+ */
 @Service
 class GameService(
     private val rooms: RoomRepository,
@@ -60,6 +71,7 @@ class GameService(
         var loadedQuestions: List<Pair<Question, List<OptionEntity>>>? = null,
         var timerJob: Job? = null,
         var autoAdvanceJob: Job? = null,
+        var evictionJob: Job? = null,
         val answeredPlayerIds: MutableSet<UUID> = mutableSetOf(),
     )
 
@@ -82,6 +94,7 @@ class GameService(
                         startedAt = Instant.now(),
                     ),
                 )
+            log.info("Quiz started roomCode={} totalQuestions={}", code, rt.loadedQuestions!!.size)
             bus.emit(
                 saved.id!!,
                 WsEnvelope(
@@ -163,11 +176,7 @@ class GameService(
                 ),
             )
             if (result.pointsEarned > 0) {
-                players.save(
-                    player.copy(
-                        score = player.score + result.pointsEarned,
-                    ),
-                )
+                players.save(player.copy(score = player.score + result.pointsEarned))
             }
             rt.answeredPlayerIds.add(player.id)
 
@@ -241,10 +250,10 @@ class GameService(
                             finishQuestionLocked(cur)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Throwable) {
-                    if (e !is kotlinx.coroutines.CancellationException) {
-                        log.error("Timer job failed for room {}", updated.id, e)
-                    }
+                    log.error("Timer job failed for room {}", updated.id, e)
                 }
             }
     }
@@ -255,9 +264,7 @@ class GameService(
         val (question, opts) = all[room.currentQuestionIndex]
         val updated =
             rooms.save(
-                room.copy(
-                    status = RoomStatus.QUESTION_RESULT.name,
-                ),
+                room.copy(status = RoomStatus.QUESTION_RESULT.name),
             )
         bus.emit(
             updated.id!!,
@@ -267,10 +274,7 @@ class GameService(
             ),
         )
         val resultPayload = statsService.buildQuestionResult(updated, question, opts)
-        bus.emit(
-            updated.id,
-            WsEnvelope(EventTypes.QUESTION_RESULT, resultPayload),
-        )
+        bus.emit(updated.id, WsEnvelope(EventTypes.QUESTION_RESULT, resultPayload))
         if (!updated.manualMode) {
             rt.autoAdvanceJob?.cancel()
             rt.autoAdvanceJob =
@@ -285,10 +289,10 @@ class GameService(
                                 advanceToNextQuestionLocked(cur)
                             }
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Throwable) {
-                        if (e !is kotlinx.coroutines.CancellationException) {
-                            log.error("Auto advance job failed for room {}", updated.id, e)
-                        }
+                        log.error("Auto advance job failed for room {}", updated.id, e)
                     }
                 }
         }
@@ -304,5 +308,46 @@ class GameService(
             )
         val payload = statsService.buildFinalRanking(finished)
         bus.emit(finished.id!!, WsEnvelope(EventTypes.QUIZ_FINISHED, payload))
+        scheduleEviction(finished.id)
+        log.info("Quiz finished roomCode={}", finished.code)
+    }
+
+    /**
+     * После `FINISHED` ждём грейс-период (фронт скачивает `/results`),
+     * потом удаляем runtime-state и закрываем шину для комнаты.
+     */
+    private fun scheduleEviction(roomId: UUID) {
+        val rt = runtime(roomId)
+        rt.evictionJob?.cancel()
+        rt.evictionJob =
+            scope.launch {
+                try {
+                    delay(quizProps.finishedRoomGraceSeconds * 1000)
+                    evictRoom(roomId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    log.error("Eviction job failed for room {}", roomId, e)
+                }
+            }
+    }
+
+    /** Видно тестам: убедиться, что всё прибралось после грейса. */
+    fun evictRoom(roomId: UUID) {
+        val removed = state.remove(roomId)
+        removed?.timerJob?.cancel()
+        removed?.autoAdvanceJob?.cancel()
+        removed?.evictionJob?.cancel()
+        bus.close(roomId)
+        log.debug("Evicted runtime state for room {}", roomId)
+    }
+
+    /** Кол-во активных runtime-state — используется в тестах для проверки утечек. */
+    fun activeRuntimeCount(): Int = state.size
+
+    @PreDestroy
+    fun shutdown() {
+        scope.cancel()
+        state.keys.toList().forEach { evictRoom(it) }
     }
 }

@@ -20,6 +20,15 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.util.UUID
 
+/**
+ * Тонкая прослойка между WebSocket-фреймом и доменными сервисами.
+ *
+ * Контракт:
+ *  - до `JOIN_ROOM` принимаем только `JOIN_ROOM` и `PING` (см. [requireJoined]).
+ *  - все доменные события (`PLAYER_JOINED` / `PLAYER_LEFT` / etc.) эмитят сами сервисы;
+ *    handler только маршрутизирует входящие сообщения.
+ *  - исключения из обработчика не разрывают соединение — отвечаем `ERROR` envelope.
+ */
 @Component
 class GameWebSocketHandler(
     private val roomService: RoomService,
@@ -51,13 +60,17 @@ class GameWebSocketHandler(
                     mono(Dispatchers.Default) {
                         runCatching { handle(ctx, raw) }
                             .onFailure { e ->
-                                log.warn("WS error: {}", e.message)
+                                log.warn(
+                                    "WS error room={} session={} msg={}",
+                                    ctx.roomId,
+                                    ctx.sessionId,
+                                    e.message,
+                                )
                                 ctx.emit(EventTypes.ERROR, ErrorPayload(e.message ?: "Ошибка"))
                             }
                     }
                 }.doFinally {
-                    ctx.subscription?.dispose()
-                    out.tryEmitComplete()
+                    onDisconnect(ctx)
                 }.then()
 
         return Mono.zip(inbound, outbound).then()
@@ -72,9 +85,8 @@ class GameWebSocketHandler(
         val payload = msg.path("payload")
 
         when (type) {
-            EventTypes.JOIN_ROOM -> {
-                onJoin(ctx, payload)
-            }
+            EventTypes.JOIN_ROOM -> onJoin(ctx, payload)
+            EventTypes.PING -> ctx.emit(EventTypes.PONG, null)
 
             EventTypes.START_QUIZ -> {
                 requireJoined(ctx)
@@ -94,17 +106,9 @@ class GameWebSocketHandler(
                 gameService.finishQuiz(room.code, ctx.organizerToken)
             }
 
-            EventTypes.SUBMIT_ANSWER -> {
-                onSubmitAnswer(ctx, payload)
-            }
+            EventTypes.SUBMIT_ANSWER -> onSubmitAnswer(ctx, payload)
 
-            EventTypes.PING -> {
-                ctx.emit(EventTypes.PONG, null)
-            }
-
-            else -> {
-                ctx.emit(EventTypes.ERROR, ErrorPayload("Неизвестный тип события: $type"))
-            }
+            else -> ctx.emit(EventTypes.ERROR, ErrorPayload("Неизвестный тип события: $type"))
         }
     }
 
@@ -119,6 +123,7 @@ class GameWebSocketHandler(
 
         val room = roomService.findRoomByCode(code)
 
+        // Организатор: проверяем токен, подписываемся, шлём sync. Никаких записей в БД.
         if (organizerToken != null) {
             if (organizerToken != room.organizerToken) {
                 ctx.emit(EventTypes.ERROR, ErrorPayload("Неверный токен организатора"))
@@ -132,6 +137,8 @@ class GameWebSocketHandler(
             return
         }
 
+        // Игрок: идемпотентный upsert через RoomService — он же эмитит PLAYER_JOINED
+        // ровно один раз (на не-reconnect); дублирующая эмиссия здесь убрана.
         if (sessionId.isNullOrBlank()) {
             ctx.emit(EventTypes.ERROR, ErrorPayload("sessionId required"))
             return
@@ -148,21 +155,6 @@ class GameWebSocketHandler(
 
         subscribeToRoom(ctx, joined.room.id!!)
         sendStateSync(ctx, joined.room.id)
-
-        if (!joined.isReconnect) {
-            val all = roomService.listPlayers(joined.room.id).map { PlayerDto(it.id!!, it.name, it.score) }
-            bus.emit(
-                joined.room.id,
-                WsEnvelope(
-                    EventTypes.PLAYER_JOINED,
-                    PlayerJoinedPayload(
-                        roomId = joined.room.id,
-                        player = PlayerDto(joined.player.id!!, joined.player.name, joined.player.score),
-                        players = all,
-                    ),
-                ),
-            )
-        }
     }
 
     private suspend fun onSubmitAnswer(
@@ -232,6 +224,24 @@ class GameWebSocketHandler(
 
     private fun requireJoined(ctx: ConnectionContext) {
         if (ctx.roomId == null) error("Сначала отправьте JOIN_ROOM")
+    }
+
+    /**
+     * Корректно отдаём ресурсы и шлём `PLAYER_LEFT` остальным участникам,
+     * если уходит реальный игрок (организатор просто переподключится).
+     */
+    private fun onDisconnect(ctx: ConnectionContext) {
+        ctx.subscription?.dispose()
+        ctx.out.tryEmitComplete()
+        val roomId = ctx.roomId
+        val playerId = ctx.playerId
+        if (roomId != null && playerId != null) {
+            // Запускаем suspend в новом mono — doFinally работает в Reactor-потоке.
+            mono(Dispatchers.Default) {
+                runCatching { roomService.handleDisconnect(roomId, playerId) }
+                    .onFailure { log.warn("handleDisconnect failed roomId={}: {}", roomId, it.message) }
+            }.subscribe()
+        }
     }
 }
 

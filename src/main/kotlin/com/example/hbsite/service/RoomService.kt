@@ -9,7 +9,14 @@ import com.example.hbsite.repo.PlayerRepository
 import com.example.hbsite.repo.QuestionRepository
 import com.example.hbsite.repo.QuizRepository
 import com.example.hbsite.repo.RoomRepository
+import com.example.hbsite.ws.EventTypes
+import com.example.hbsite.ws.PlayerDto
+import com.example.hbsite.ws.PlayerJoinedPayload
+import com.example.hbsite.ws.PlayerLeftPayload
+import com.example.hbsite.ws.RoomEventBus
+import com.example.hbsite.ws.WsEnvelope
 import kotlinx.coroutines.flow.toList
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -34,12 +41,18 @@ class RoomService(
     private val codeGenerator: CodeGenerator,
     private val nameSanitizer: NameSanitizer,
     private val quizProps: QuizProperties,
+    private val bus: RoomEventBus,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     suspend fun createRoom(): CreatedRoom {
         val quiz =
             quizzes.findBySlug(quizProps.defaultQuizSlug)
                 ?: throw IllegalStateException("Default quiz not seeded")
         val totalQuestions = questions.countByQuizId(quiz.id!!).toInt()
+        if (totalQuestions == 0) {
+            throw IllegalStateException("Default quiz has no questions seeded")
+        }
 
         var code = codeGenerator.generate()
         var attempts = 0
@@ -59,13 +72,26 @@ class RoomService(
                     manualMode = quizProps.manualMode,
                 ),
             )
+        log.info("Room created code={} totalQuestions={}", saved.code, totalQuestions)
         return CreatedRoom(saved, quiz, totalQuestions)
     }
 
     suspend fun findRoomByCode(code: String): Room =
         rooms.findByCode(code) ?: throw RoomNotFoundException(code)
 
-    suspend fun joinRoom(code: String, name: String, sessionId: String): JoinedPlayer {
+    /**
+     * Идемпотентно: первый вызов создаёт игрока и публикует [EventTypes.PLAYER_JOINED];
+     * повторный вызов с тем же `sessionId` просто возвращает существующего игрока с
+     * `isReconnect=true` без эмиссии в шину.
+     *
+     * Эмиссия живёт здесь, а не в контроллере/WS-handler, чтобы любой путь входа
+     * (REST, WS) приводил ровно к одному событию.
+     */
+    suspend fun joinRoom(
+        code: String,
+        name: String,
+        sessionId: String,
+    ): JoinedPlayer {
         val room = findRoomByCode(code)
         val cleaned = nameSanitizer.sanitize(name)
         if (cleaned.length !in 2..20) {
@@ -87,7 +113,19 @@ class RoomService(
                     sessionId = sessionId,
                 ),
             )
+        emitPlayersUpdate(room.id, EventTypes.PLAYER_JOINED, saved)
+        log.info("Player joined roomCode={} playerId={} name={}", code, saved.id, saved.name)
         return JoinedPlayer(room, saved, isReconnect = false)
+    }
+
+    /**
+     * Вызывается из WS-обработчика при разрыве соединения игрока.
+     * Игрока из БД не удаляем (ответы в `answers` ссылаются), просто шлём `PLAYER_LEFT`.
+     */
+    suspend fun handleDisconnect(roomId: UUID, playerId: UUID) {
+        val player = players.findById(playerId) ?: return
+        emitPlayersUpdate(roomId, EventTypes.PLAYER_LEFT, player)
+        log.info("Player disconnected roomId={} playerId={}", roomId, player.id)
     }
 
     suspend fun listPlayers(roomId: UUID): List<Player> =
@@ -95,5 +133,26 @@ class RoomService(
 
     suspend fun requireOrganizer(room: Room, token: String?) {
         if (token == null || token != room.organizerToken) throw NotOrganizerException()
+    }
+
+    private suspend fun emitPlayersUpdate(roomId: UUID, type: String, player: Player) {
+        val all =
+            listPlayers(roomId).map { PlayerDto(it.id!!, it.name, it.score) }
+        val playerDto = PlayerDto(player.id!!, player.name, player.score)
+        val envelope =
+            when (type) {
+                EventTypes.PLAYER_JOINED ->
+                    WsEnvelope(
+                        type,
+                        PlayerJoinedPayload(roomId = roomId, player = playerDto, players = all),
+                    )
+                EventTypes.PLAYER_LEFT ->
+                    WsEnvelope(
+                        type,
+                        PlayerLeftPayload(roomId = roomId, playerId = player.id, players = all),
+                    )
+                else -> error("Unsupported player event type: $type")
+            }
+        bus.emit(roomId, envelope)
     }
 }
