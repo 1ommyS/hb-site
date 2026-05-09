@@ -1,8 +1,9 @@
 import { Button } from "@heroui/react";
+import type { ReactElement } from "react";
 import { useGame } from "../store/gameStore";
 import { getSocket } from "../App";
 
-export function ResultPage(): JSX.Element {
+export function ResultPage(): ReactElement {
   const result = useGame((s) => s.questionResult);
   const me = useGame((s) => s.myPlayer);
   const role = useGame((s) => s.role);
@@ -24,47 +25,46 @@ export function ResultPage(): JSX.Element {
   const next = (): void => getSocket().send("NEXT_QUESTION");
 
   return (
-    <main className="flex flex-1 flex-col gap-5 pt-4">
-      <header className="text-center">
-        <p className="uppercase text-xs tracking-widest text-zinc-500">
-          Результат
-        </p>
-        <h1 className="text-2xl font-bold mt-1">
-          Правильно: {result.correctOptions.join(", ")}
+    <main className="page">
+      <header className="space-y-2 text-center">
+        <p className="eyebrow">результат вопроса</p>
+        <h1 className="screen-title">
+          Верный ответ: {result.correctOptions.join(", ")}
         </h1>
       </header>
 
       {q?.text && (
-        <p className="text-center text-zinc-400 text-sm">{q.text}</p>
+        <p className="text-center text-sm leading-6 text-zinc-400">{q.text}</p>
       )}
 
       {result.comment && (
-        <div className="rounded-2xl bg-ink-900 border border-ink-800 p-4 text-sm">
+        <div className="soft-panel p-4 text-sm leading-6 text-zinc-200">
           {result.comment}
         </div>
       )}
 
       {me && myAnswer && (
         <div
-          className={`rounded-2xl p-4 ${
-            myAnswer.isCorrect ? "bg-emerald-700/30" : "bg-red-700/30"
+          className={`rounded-lg border p-4 ${
+            myAnswer.isCorrect
+              ? "border-radar/35 bg-radar/12"
+              : "border-accent/35 bg-accent/12"
           }`}
         >
-          <p className="text-xs uppercase tracking-widest text-zinc-400">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">
             Твой ответ
           </p>
           <p className="font-bold text-lg">
-            {myAnswer.selectedOptions.join(", ") || "пропущен"}{" "}
-            {myAnswer.isCorrect ? "✓" : "✗"}
+            {myAnswer.selectedOptions.join(", ") || "пропущен"}
           </p>
           <p className="text-sm text-zinc-300">
-            +{myAnswer.pointsEarned} баллов · всего {myAnswer.totalScore}
+            +{myAnswer.pointsEarned} баллов, всего {myAnswer.totalScore}
           </p>
         </div>
       )}
 
-      <section>
-        <h2 className="text-sm font-semibold mb-2 text-zinc-300">
+      <section className="soft-panel p-4">
+        <h2 className="mb-3 text-sm font-bold text-zinc-200">
           Распределение
         </h2>
         <ul className="space-y-2">
@@ -74,17 +74,17 @@ export function ResultPage(): JSX.Element {
             return (
               <li key={key}>
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className={correct ? "text-emerald-400" : ""}>
-                    {key} {correct && "✓"}
+                  <span className={correct ? "font-bold text-radar" : ""}>
+                    {key}
                   </span>
                   <span className="text-zinc-400">
                     {count} ({pct}%)
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-ink-800 overflow-hidden mt-1">
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-ink-800">
                   <div
                     className={`h-full ${
-                      correct ? "bg-emerald-500" : "bg-zinc-500"
+                      correct ? "bg-radar" : "bg-sky/55"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
@@ -95,16 +95,16 @@ export function ResultPage(): JSX.Element {
         </ul>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold mb-2 text-zinc-300">
+      <section className="soft-panel p-4">
+        <h2 className="mb-3 text-sm font-bold text-zinc-200">
           Топ-5 рейтинга
         </h2>
-        <ol className="space-y-1 text-sm">
+        <ol className="space-y-2 text-sm">
           {result.ranking.slice(0, 5).map((p, i) => (
             <li
               key={p.id}
-              className={`flex justify-between rounded-xl px-3 py-2 ${
-                p.id === me?.id ? "bg-accent text-white" : "bg-ink-900"
+              className={`flex justify-between rounded-lg px-3 py-2.5 ${
+                p.id === me?.id ? "bg-accent text-white" : "bg-panel-2"
               }`}
             >
               <span>
@@ -117,15 +117,15 @@ export function ResultPage(): JSX.Element {
       </section>
 
       {role === "organizer" && (
-        <Button
-          color="danger"
-          size="lg"
-          radius="lg"
-          className="h-14 text-base font-semibold"
-          onPress={next}
-        >
-          Следующий вопрос →
-        </Button>
+        <div className="sticky-actions">
+          <Button
+            size="lg"
+            className="primary-action text-base"
+            onPress={next}
+          >
+            Следующий вопрос
+          </Button>
+        </div>
       )}
     </main>
   );

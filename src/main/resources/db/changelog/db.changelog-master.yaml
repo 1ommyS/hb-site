@@ -19,3 +19,14 @@ databaseChangeLog:
             splitStatements: false
             stripComments: false
             relativeToChangelogFile: false
+
+  - changeSet:
+      id: 3-seed-quiz-from-csv
+      author: hb-site
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/03_seed_quiz_from_csv.sql
+            # plpgsql-функция с $$ — нельзя сплитить по ';'
+            splitStatements: false
+            stripComments: false
+            relativeToChangelogFile: false

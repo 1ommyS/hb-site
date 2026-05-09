@@ -17,6 +17,10 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: jdbc:postgresql://localhost:5432/hbsite
+    user: hbsite
+    password: hbsite
+    driver-class-name: org.postgresql.Driver
   data:
     redis:
       host: localhost

@@ -1,6 +1,7 @@
 package com.example.hbsite.api
 
 import com.example.hbsite.ws.PlayerDto
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.Instant
 import java.util.UUID
 
@@ -36,6 +37,7 @@ data class JoinRoomRequest(
 data class JoinRoomResponse(
     val roomId: UUID,
     val player: PlayerDto,
+    @JsonProperty("isReconnect")
     val isReconnect: Boolean,
 )
 

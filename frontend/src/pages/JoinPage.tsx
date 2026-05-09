@@ -1,11 +1,12 @@
 import { useState } from "react";
+import type { ReactElement } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Input, Label, TextField } from "@heroui/react";
 import { restApi } from "../api/rest";
 import { useGame } from "../store/gameStore";
 import { getSocket } from "../App";
 
-export function JoinPage(): JSX.Element {
+export function JoinPage(): ReactElement {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const sessionId = useGame((s) => s.sessionId);
@@ -46,50 +47,65 @@ export function JoinPage(): JSX.Element {
   };
 
   return (
-    <main className="flex flex-1 flex-col gap-6 pt-6">
+    <main className="page">
       <button
         type="button"
-        className="text-zinc-400 text-sm self-start tap-target"
+        className="tap-target self-start rounded-lg px-1 text-sm font-semibold text-zinc-400 transition hover:text-zinc-100"
         onClick={() => navigate("/")}
       >
-        ← назад
+        Назад
       </button>
 
-      <h1 className="text-2xl font-bold">Подключение к квизу</h1>
+      <header className="space-y-3">
+        <p className="eyebrow">посадка на борт</p>
+        <h1 className="screen-title">Подключение к квизу</h1>
+        <p className="text-sm leading-6 text-zinc-400">
+          Введи код комнаты и имя, которое увидят остальные игроки.
+        </p>
+      </header>
 
-      <div className="space-y-4">
+      <div className="soft-panel space-y-4 p-4">
         <TextField
           value={code}
           onChange={(v) => setCode(v.toUpperCase().slice(0, 8))}
         >
-          <Label>Код комнаты</Label>
+          <Label className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-sky">
+            Код комнаты
+          </Label>
           <Input
             placeholder="ABCDE"
             autoCapitalize="characters"
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
+            className="h-14 rounded-lg border border-white/10 bg-panel-2 px-4 text-center text-xl font-black uppercase tracking-[0.24em] text-zinc-50 outline-none transition focus:border-sky/70"
           />
         </TextField>
         <TextField
           value={name}
           onChange={(v) => setName(v.slice(0, 20))}
         >
-          <Label>Твое имя</Label>
-          <Input placeholder="Ваня forever" autoComplete="given-name" />
+          <Label className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-sky">
+            Твое имя
+          </Label>
+          <Input
+            placeholder="Ваня forever"
+            autoComplete="given-name"
+            className="h-14 rounded-lg border border-white/10 bg-panel-2 px-4 text-base font-semibold text-zinc-50 outline-none transition focus:border-sky/70"
+          />
         </TextField>
       </div>
 
-      <Button
-        color="danger"
-        size="lg"
-        radius="lg"
-        className="h-14 text-base font-semibold"
-        isLoading={busy}
-        onPress={submit}
-      >
-        Войти в комнату
-      </Button>
+      <div className="sticky-actions">
+        <Button
+          size="lg"
+          className="primary-action text-base"
+          isDisabled={busy}
+          onPress={submit}
+        >
+          {busy ? "Подключаем..." : "Войти в комнату"}
+        </Button>
+      </div>
     </main>
   );
 }

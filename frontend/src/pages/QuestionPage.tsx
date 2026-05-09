@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ReactElement } from "react";
 import { Button } from "@heroui/react";
 import { useGame } from "../store/gameStore";
 import { Timer } from "../components/Timer";
@@ -7,7 +8,7 @@ import { useEndOfQuestionWarning } from "../hooks/useSound";
 import { getSocket } from "../App";
 import { AnnoyingEffects } from "../components/AnnoyingEffects";
 
-export function QuestionPage(): JSX.Element {
+export function QuestionPage(): ReactElement {
   const q = useGame((s) => s.currentQuestion);
   const selected = useGame((s) => s.selectedOptions);
   const submitted = useGame((s) => s.answerSubmitted);
@@ -48,20 +49,24 @@ export function QuestionPage(): JSX.Element {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-5 pt-3 relative">
+    <main className="page relative">
       {annoyingMode && remainingHint != null && (
         <AnnoyingEffects timeRemainingMs={remainingHint} questionId={q.questionId} />
       )}
-      <header className="flex items-center justify-between text-xs text-zinc-500 uppercase tracking-widest">
-        <span>
+      <header className="flex items-center justify-between gap-2">
+        <span className="status-chip">
           Вопрос {q.questionNumber} / {q.totalQuestions}
         </span>
-        <span>{isMulti ? "несколько вариантов" : "один вариант"}</span>
+        <span className="status-chip">{isMulti ? "несколько" : "один"}</span>
       </header>
 
       <Timer startedAt={q.startedAt} endsAt={q.endsAt} onWarning={playWarning} />
 
-      <h1 className="text-xl font-bold leading-snug">{q.text}</h1>
+      <section className="soft-panel p-4">
+        <h1 className="text-xl font-black leading-snug text-zinc-50">
+          {q.text}
+        </h1>
+      </section>
 
       <div className="flex flex-col gap-3">
         {q.options.map((o) => (
@@ -76,20 +81,20 @@ export function QuestionPage(): JSX.Element {
       </div>
 
       {isMulti && (
-        <Button
-          color="danger"
-          size="lg"
-          radius="lg"
-          className="h-14 text-base font-semibold"
-          isDisabled={submitted || selected.length === 0}
-          onPress={() => submit()}
-        >
-          {submitted ? "Ответ принят" : "Ответить"}
-        </Button>
+        <div className="sticky-actions">
+          <Button
+            size="lg"
+            className="primary-action text-base disabled:opacity-50"
+            isDisabled={submitted || selected.length === 0}
+            onPress={() => submit()}
+          >
+            {submitted ? "Ответ принят" : "Ответить"}
+          </Button>
+        </div>
       )}
 
       {submitted && (
-        <p className="text-center text-zinc-400 text-sm">
+        <p className="text-center text-sm font-semibold text-radar">
           Ответ принят. Ждём остальных.
         </p>
       )}

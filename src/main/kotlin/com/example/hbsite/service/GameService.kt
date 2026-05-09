@@ -80,8 +80,8 @@ class GameService(
     private fun runtime(roomId: UUID): RuntimeState = state.computeIfAbsent(roomId) { RuntimeState() }
 
     suspend fun startQuiz(code: String, organizerToken: String?) {
-        val room = rooms.findByCode(code) ?: throw RoomNotFoundException(code)
-        if (organizerToken == null || organizerToken != room.organizerToken) throw NotOrganizerException()
+        val room = findRoom(code)
+        requireOrganizer(room, organizerToken)
         val rt = runtime(room.id!!)
         rt.mutex.withLock {
             val cur = rooms.findById(room.id) ?: throw RoomNotFoundException(code)
@@ -107,8 +107,8 @@ class GameService(
     }
 
     suspend fun nextQuestion(code: String, organizerToken: String?) {
-        val room = rooms.findByCode(code) ?: throw RoomNotFoundException(code)
-        if (organizerToken == null || organizerToken != room.organizerToken) throw NotOrganizerException()
+        val room = findRoom(code)
+        requireOrganizer(room, organizerToken)
         val rt = runtime(room.id!!)
         rt.mutex.withLock {
             val cur = rooms.findById(room.id) ?: return@withLock
@@ -121,8 +121,8 @@ class GameService(
     }
 
     suspend fun finishQuiz(code: String, organizerToken: String?) {
-        val room = rooms.findByCode(code) ?: throw RoomNotFoundException(code)
-        if (organizerToken == null || organizerToken != room.organizerToken) throw NotOrganizerException()
+        val room = findRoom(code)
+        requireOrganizer(room, organizerToken)
         val rt = runtime(room.id!!)
         rt.mutex.withLock {
             val cur = rooms.findById(room.id) ?: return@withLock
@@ -139,7 +139,7 @@ class GameService(
         questionId: UUID,
         selectedKeys: List<String>,
     ): AnswerOutcome {
-        val room = rooms.findByCode(roomCode) ?: throw RoomNotFoundException(roomCode)
+        val room = findRoom(roomCode)
         val player =
             players.findByRoomIdAndSessionId(room.id!!, sessionId)
                 ?: throw PlayerNotFoundException()
@@ -159,7 +159,7 @@ class GameService(
             val existing = answers.findByRoomIdAndPlayerIdAndQuestionId(room.id, player.id!!, question.id!!)
             if (existing != null) return AnswerOutcome(false, "Ответ уже принят")
 
-            val sanitizedKeys = selectedKeys.distinct().filter { key -> opts.any { it.optionKey == key } }
+            val sanitizedKeys = sanitizeSelectedKeys(selectedKeys, opts)
             val result = scoring.score(question, opts, sanitizedKeys)
             val answerTime =
                 cur.questionStartedAt?.let { Duration.between(it, now).toMillis() } ?: 0L
@@ -187,6 +187,21 @@ class GameService(
             }
             return AnswerOutcome(true, acceptedAt = now)
         }
+    }
+
+    private suspend fun findRoom(code: String): Room =
+        rooms.findByCode(code) ?: throw RoomNotFoundException(code)
+
+    private fun requireOrganizer(room: Room, token: String?) {
+        if (token == null || token != room.organizerToken) throw NotOrganizerException()
+    }
+
+    private fun sanitizeSelectedKeys(
+        selectedKeys: List<String>,
+        opts: List<OptionEntity>,
+    ): List<String> {
+        val allowed = opts.map { it.optionKey }.toSet()
+        return selectedKeys.distinct().filter { it in allowed }
     }
 
     private suspend fun ensureQuestionsLoaded(room: Room) {

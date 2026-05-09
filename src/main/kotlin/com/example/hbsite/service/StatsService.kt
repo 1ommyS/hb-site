@@ -1,5 +1,7 @@
 package com.example.hbsite.service
 
+import com.example.hbsite.api.QuestionDistributionDto
+import com.example.hbsite.api.StatsResponse
 import com.example.hbsite.domain.OptionEntity
 import com.example.hbsite.domain.Player
 import com.example.hbsite.domain.Question
@@ -23,6 +25,38 @@ class StatsService(
     private val options: OptionRepository,
     private val answers: AnswerRepository,
 ) {
+    suspend fun buildRoomStats(room: Room): StatsResponse {
+        val qs = questions.findAllByQuizIdOrderByOrderNumberAsc(room.quizId).toList()
+        val optsByQuestion = options.findAllByQuestionIds(qs.mapNotNull { it.id }).toList().groupBy { it.questionId }
+        val allAnswers = answers.findAllByRoomId(room.id!!).toList()
+        val answersByQuestion = allAnswers.groupBy { it.questionId }
+
+        val perQuestion =
+            qs.mapIndexed { index, question ->
+                val questionOptions = optsByQuestion[question.id!!] ?: emptyList()
+                QuestionDistributionDto(
+                    questionId = question.id,
+                    questionNumber = index + 1,
+                    text = question.text,
+                    correctOptions = questionOptions.filter { it.isCorrect }.map { it.optionKey },
+                    distribution = buildDistribution(questionOptions, answersByQuestion[question.id].orEmpty()),
+                )
+            }
+
+        return StatsResponse(
+            roomId = room.id,
+            mostPopularWrong = mostPopularWrongAnswer(allAnswers),
+            hardestQuestionId = hardestQuestion(answersByQuestion),
+            unanimouslyCorrectQuestionId = answersByQuestion.entries.firstOrNull { (_, v) ->
+                v.isNotEmpty() && v.all { it.isCorrect }
+            }?.key,
+            confusingQuestionId = answersByQuestion.entries.firstOrNull { (_, v) ->
+                v.isNotEmpty() && v.none { it.isCorrect }
+            }?.key,
+            perQuestion = perQuestion,
+        )
+    }
+
     suspend fun buildQuestionResult(
         room: Room,
         question: Question,
@@ -32,16 +66,7 @@ class StatsService(
         val ps = players.findAllByRoomIdOrderByJoinedAtAsc(room.id).toList()
         val playerById = ps.associateBy { it.id!! }
 
-        val distribution = LinkedHashMap<String, Int>()
-        opts.forEach { distribution[it.optionKey] = 0 }
-        ans.forEach { a ->
-            a.selectedOptions
-                .split(",")
-                .filter { it.isNotBlank() }
-                .forEach { key ->
-                    distribution[key] = (distribution[key] ?: 0) + 1
-                }
-        }
+        val distribution = buildDistribution(opts, ans)
 
         val playerAnswers =
             ans.map { a ->
@@ -116,4 +141,38 @@ class StatsService(
                 },
         )
     }
+
+    private fun buildDistribution(
+        opts: List<OptionEntity>,
+        ans: List<com.example.hbsite.domain.Answer>,
+    ): Map<String, Int> {
+        val distribution = LinkedHashMap<String, Int>()
+        opts.forEach { distribution[it.optionKey] = 0 }
+        ans.forEach { answer ->
+            answer.selectedOptions
+                .split(",")
+                .filter { it.isNotBlank() }
+                .forEach { key -> distribution[key] = (distribution[key] ?: 0) + 1 }
+        }
+        return distribution
+    }
+
+    private fun mostPopularWrongAnswer(ans: List<com.example.hbsite.domain.Answer>): String? =
+        ans
+            .asSequence()
+            .filter { !it.isCorrect }
+            .flatMap { it.selectedOptions.split(",").asSequence() }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+
+    private fun hardestQuestion(
+        answersByQuestion: Map<java.util.UUID, List<com.example.hbsite.domain.Answer>>,
+    ): java.util.UUID? =
+        answersByQuestion
+            .mapValues { (_, answers) -> answers.count { it.isCorrect }.toDouble() / answers.size.coerceAtLeast(1) }
+            .minByOrNull { it.value }
+            ?.key
 }

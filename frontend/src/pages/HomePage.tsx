@@ -1,11 +1,12 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@heroui/react";
 import { useEffect } from "react";
+import type { ReactElement } from "react";
 import { useGame } from "../store/gameStore";
 import { restApi } from "../api/rest";
 import { getSocket } from "../App";
 
-export function HomePage(): JSX.Element {
+export function HomePage(): ReactElement {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const setError = useGame((s) => s.setError);
@@ -38,41 +39,48 @@ export function HomePage(): JSX.Element {
   };
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center text-center gap-8">
-      <div className="space-y-3">
-        <p className="text-accent uppercase tracking-widest text-xs">квиз</p>
-        <h1 className="text-4xl font-black leading-tight">
+    <main className="page-centered">
+      <section className="runway" aria-hidden>
+        <div className="absolute inset-x-0 top-4 flex justify-center gap-2">
+          <span className="h-1.5 w-10 rounded-full bg-sky/65" />
+          <span className="h-1.5 w-10 rounded-full bg-fuel/70" />
+          <span className="h-1.5 w-10 rounded-full bg-radar/65" />
+        </div>
+        <div className="runway-plane">✈</div>
+      </section>
+
+      <div className="space-y-4">
+        <p className="eyebrow">квиз на день рождения</p>
+        <h1 className="hero-title">
           День рождения
           <br />
           <span className="text-accent">Вани</span>
         </h1>
-        <p className="text-zinc-400 text-sm">
-          Сколько ты знаешь про главного авиамана МАИ?
+        <p className="mx-auto max-w-[320px] text-sm leading-6 text-zinc-300">
+          Быстрый квиз про главного авиамана МАИ: подключайся по коду,
+          отвечай с телефона и забирай место в рейтинге.
         </p>
       </div>
 
       <div className="w-full space-y-3">
         <Button
-          color="danger"
           size="lg"
-          radius="lg"
-          className="w-full h-14 text-base font-semibold"
+          className="primary-action text-base"
           onPress={() => navigate("/join")}
         >
-          Я игрок ✈️
+          Я игрок
         </Button>
         <Button
-          variant="bordered"
+          variant="outline"
           size="lg"
-          radius="lg"
-          className="w-full h-14 text-base font-semibold border-zinc-700 text-zinc-100"
+          className="secondary-action text-base"
           onPress={onCreate}
         >
-          Я организатор 🎤
+          Я организатор
         </Button>
       </div>
-      <p className="text-xs text-zinc-500">
-        Лучше всего работает на iPhone в портретном режиме.
+      <p className="text-xs leading-5 text-zinc-500">
+        Оптимально для телефона в портретном режиме.
       </p>
     </main>
   );

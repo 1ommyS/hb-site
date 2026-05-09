@@ -99,6 +99,23 @@ export interface QuizFinishedPayload {
   ranking: FinalRankingRow[];
 }
 
+export interface QuestionDistributionDto {
+  questionId: string;
+  questionNumber: number;
+  text: string;
+  correctOptions: string[];
+  distribution: Record<string, number>;
+}
+
+export interface StatsResponse {
+  roomId: string;
+  mostPopularWrong: string | null;
+  hardestQuestionId: string | null;
+  unanimouslyCorrectQuestionId: string | null;
+  confusingQuestionId: string | null;
+  perQuestion: QuestionDistributionDto[];
+}
+
 export interface PlayerJoinedPayload {
   roomId: string;
   player: PlayerDto;

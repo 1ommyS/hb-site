@@ -1,12 +1,9 @@
 package com.example.hbsite.api
 
-import com.example.hbsite.repo.AnswerRepository
-import com.example.hbsite.repo.OptionRepository
 import com.example.hbsite.repo.QuestionRepository
 import com.example.hbsite.service.RoomService
 import com.example.hbsite.service.StatsService
 import com.example.hbsite.ws.PlayerDto
-import kotlinx.coroutines.flow.toList
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -23,8 +20,6 @@ class RoomController(
     private val roomService: RoomService,
     private val statsService: StatsService,
     private val questions: QuestionRepository,
-    private val options: OptionRepository,
-    private val answers: AnswerRepository,
 ) {
     @PostMapping
     suspend fun create(exchange: ServerWebExchange): ResponseEntity<CreateRoomResponse> {
@@ -88,61 +83,7 @@ class RoomController(
     @GetMapping("/{code}/stats")
     suspend fun stats(
         @PathVariable code: String,
-    ): StatsResponse {
-        val room = roomService.findRoomByCode(code)
-        val qs = questions.findAllByQuizIdOrderByOrderNumberAsc(room.quizId).toList()
-        val opts = options.findAllByQuestionIds(qs.mapNotNull { it.id }).toList().groupBy { it.questionId }
-        val ans = answers.findAllByRoomId(room.id!!).toList()
-        val ansByQ = ans.groupBy { it.questionId }
-
-        val perQuestion =
-            qs.mapIndexed { i, q ->
-                val qOpts = opts[q.id!!] ?: emptyList()
-                val dist = LinkedHashMap<String, Int>()
-                qOpts.forEach { dist[it.optionKey] = 0 }
-                ansByQ[q.id]
-                    ?.flatMap { it.selectedOptions.split(",") }
-                    ?.filter { it.isNotBlank() }
-                    ?.forEach { dist[it] = (dist[it] ?: 0) + 1 }
-                QuestionDistributionDto(
-                    questionId = q.id,
-                    questionNumber = i + 1,
-                    text = q.text,
-                    correctOptions = qOpts.filter { it.isCorrect }.map { it.optionKey },
-                    distribution = dist,
-                )
-            }
-
-        val wrongTally =
-            ans
-                .asSequence()
-                .filter { !it.isCorrect }
-                .flatMap { it.selectedOptions.split(",").asSequence() }
-                .filter { it.isNotBlank() }
-                .groupingBy { it }
-                .eachCount()
-        val mostPopularWrong = wrongTally.maxByOrNull { it.value }?.key
-
-        val hardest =
-            ansByQ
-                .mapValues { (_, v) -> v.count { it.isCorrect }.toDouble() / v.size.coerceAtLeast(1) }
-                .minByOrNull { it.value }
-                ?.key
-
-        val unanimousCorrect =
-            ansByQ.entries.firstOrNull { (_, v) -> v.isNotEmpty() && v.all { it.isCorrect } }?.key
-        val confusing =
-            ansByQ.entries.firstOrNull { (_, v) -> v.isNotEmpty() && v.none { it.isCorrect } }?.key
-
-        return StatsResponse(
-            roomId = room.id,
-            mostPopularWrong = mostPopularWrong,
-            hardestQuestionId = hardest,
-            unanimouslyCorrectQuestionId = unanimousCorrect,
-            confusingQuestionId = confusing,
-            perQuestion = perQuestion,
-        )
-    }
+    ): StatsResponse = statsService.buildRoomStats(roomService.findRoomByCode(code))
 
     private fun baseUrl(exchange: ServerWebExchange): String {
         val req = exchange.request

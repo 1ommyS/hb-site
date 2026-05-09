@@ -3,6 +3,7 @@ import type {
   QuizFinishedPayload,
   RoomCreatedPayload,
   RoomInfoResponse,
+  StatsResponse,
 } from "../types";
 
 async function request<T>(
@@ -43,5 +44,5 @@ export const restApi = {
     request<QuizFinishedPayload>(`/api/rooms/${encodeURIComponent(code)}/results`),
 
   stats: (code: string) =>
-    request<unknown>(`/api/rooms/${encodeURIComponent(code)}/stats`),
+    request<StatsResponse>(`/api/rooms/${encodeURIComponent(code)}/stats`),
 };

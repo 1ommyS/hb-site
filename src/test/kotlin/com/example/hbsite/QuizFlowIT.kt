@@ -5,10 +5,12 @@ import com.example.hbsite.support.payloadMap
 import com.example.hbsite.ws.EventTypes
 import com.example.hbsite.ws.WsEnvelope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -20,6 +22,7 @@ class QuizFlowIT : IntegrationTestBase() {
     fun `full quiz flow with two players in manual mode`() =
         runTest {
             val room = fixtures.createRoom()
+            assertEquals(40, room.totalQuestions)
             val org = fixtures.connectOrganizer(room.code, room.organizerToken)
             val sessionA = UUID.randomUUID().toString()
             val sessionB = UUID.randomUUID().toString()
@@ -77,6 +80,44 @@ class QuizFlowIT : IntegrationTestBase() {
                 org.close()
                 playerA.close()
                 playerB.close()
+            }
+        }
+
+    @Test
+    fun `wrong answer finishes only current question not whole quiz`() =
+        runTest {
+            val room = fixtures.createRoom()
+            assertEquals(40, room.totalQuestions)
+            val org = fixtures.connectOrganizer(room.code, room.organizerToken)
+            val sessionId = UUID.randomUUID().toString()
+            fixtures.joinViaRest(room.code, "Игрок", sessionId)
+            val player = fixtures.connectPlayer(room.code, "Игрок", sessionId)
+
+            try {
+                org.send(WsEnvelope(EventTypes.START_QUIZ, emptyMap<String, Any>()))
+                player.awaitEvent(EventTypes.QUIZ_STARTED)
+                val q1 = player.awaitEvent(EventTypes.QUESTION_STARTED).payloadMap()
+                val q1Id = q1["questionId"] as String
+
+                player.send(
+                    WsEnvelope(
+                        EventTypes.SUBMIT_ANSWER,
+                        mapOf("questionId" to q1Id, "selectedOptions" to listOf("D")),
+                    ),
+                )
+
+                player.awaitEvent(EventTypes.ANSWER_ACCEPTED)
+                val result = player.awaitEvent(EventTypes.QUESTION_RESULT).payloadMap()
+                assertEquals(q1Id, result["questionId"])
+
+                val unexpectedFinish =
+                    withTimeoutOrNull(300) {
+                        player.awaitEvent(EventTypes.QUIZ_FINISHED)
+                    }
+                assertNull(unexpectedFinish, "wrong answer must not finish a 40-question quiz")
+            } finally {
+                org.close()
+                player.close()
             }
         }
 }

@@ -12,7 +12,7 @@ class RoomEventBus {
 
     private fun sinkFor(roomId: UUID): Sinks.Many<WsEnvelope> =
         sinks.computeIfAbsent(roomId) {
-            Sinks.many().multicast().onBackpressureBuffer<WsEnvelope>(256, false)
+            Sinks.many().multicast().directBestEffort()
         }
 
     fun emit(roomId: UUID, event: WsEnvelope) {

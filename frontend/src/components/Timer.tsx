@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactElement } from "react";
 
 interface Props {
   startedAt: string;
@@ -7,7 +8,7 @@ interface Props {
   onExpired?: () => void;
 }
 
-export function Timer({ startedAt, endsAt, onWarning, onExpired }: Props): JSX.Element {
+export function Timer({ startedAt, endsAt, onWarning, onExpired }: Props): ReactElement {
   const [now, setNow] = useState(() => Date.now());
   const [warned, setWarned] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -43,27 +44,32 @@ export function Timer({ startedAt, endsAt, onWarning, onExpired }: Props): JSX.E
   const danger = remaining <= 10_000;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`soft-panel flex flex-col gap-3 p-3 ${danger ? "border-accent/45" : ""}`}>
       <div className="flex items-baseline justify-between">
-        <span className="text-zinc-400 text-xs uppercase tracking-widest">
-          Таймер
+        <span className="eyebrow">
+          До отсечки
         </span>
         <span
           className={`font-mono text-3xl font-bold ${
-            danger ? "text-accent animate-pulse" : "text-zinc-100"
+            danger ? "text-accent animate-pulse" : "text-sky"
           }`}
         >
-          {remainingSec}
+          {remainingSec}<span className="text-base text-zinc-400">с</span>
         </span>
       </div>
-      <div className="h-2 rounded-full bg-ink-800 overflow-hidden">
+      <div className="h-3 rounded-full bg-black/30 overflow-hidden border border-white/5">
         <div
-          className={`h-full transition-[width] duration-200 ${
-            danger ? "bg-accent" : "bg-emerald-500"
+          className={`h-full rounded-full transition-[width] duration-200 ${
+            danger ? "bg-accent" : "bg-radar"
           }`}
           style={{ width: `${pct}%` }}
         />
       </div>
+      {danger && (
+        <p className="text-xs font-semibold text-fuel">
+          10 секунд, думай быстрее, профессор авиации не ждёт
+        </p>
+      )}
     </div>
   );
 }

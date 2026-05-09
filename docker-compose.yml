@@ -27,5 +27,18 @@ services:
       timeout: 3s
       retries: 10
 
+#  caddy:
+#    image: caddy:2-alpine
+#    container_name: hb-caddy
+#    depends_on:
+#      - postgres
+#      - redis
+#    ports:
+#      - "80:80"
+#    volumes:
+#      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
+
 volumes:
   hb-pg-data:

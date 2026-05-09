@@ -12,15 +12,12 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.testcontainers.containers.PostgreSQLContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
 import reactor.core.publisher.Mono
 import tools.jackson.databind.json.JsonMapper
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
 @ActiveProfiles("test")
-@Testcontainers
 abstract class IntegrationTestBase {
     @LocalServerPort
     protected var port: Int = 0
@@ -49,7 +46,6 @@ abstract class IntegrationTestBase {
     }
 
     companion object {
-        @Container
         @JvmStatic
         protected val postgres: PostgreSQLContainer<*> =
             PostgreSQLContainer("postgres:17-alpine")
@@ -71,6 +67,9 @@ abstract class IntegrationTestBase {
             registry.add("spring.datasource.url") { postgres.jdbcUrl }
             registry.add("spring.datasource.username") { postgres.username }
             registry.add("spring.datasource.password") { postgres.password }
+            registry.add("spring.liquibase.url") { postgres.jdbcUrl }
+            registry.add("spring.liquibase.user") { postgres.username }
+            registry.add("spring.liquibase.password") { postgres.password }
         }
     }
 }

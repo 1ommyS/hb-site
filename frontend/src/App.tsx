@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect, useMemo, type ReactElement } from "react";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { GameSocket, buildWsUrl } from "./api/ws";
 import { useGame } from "./store/gameStore";
 import { HomePage } from "./pages/HomePage";
@@ -87,10 +87,11 @@ function useSocketBridge(): void {
   }, [applyStateSync, setQuestionStarted, setQuestionResult, setQuizFinished, setPlayers, markSubmitted, setError]);
 }
 
-function GameRouter(): JSX.Element {
+function GameRouter(): ReactElement {
   const status = useGame((s) => s.status);
   const role = useGame((s) => s.role);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const target = useMemo(() => {
     if (!role) return null;
@@ -105,9 +106,9 @@ function GameRouter(): JSX.Element {
 
   useEffect(() => {
     if (target && location.pathname !== target) {
-      window.history.replaceState({}, "", target);
+      navigate(target, { replace: true });
     }
-  }, [target, location.pathname]);
+  }, [target, location.pathname, navigate]);
 
   return (
     <Routes>
@@ -123,10 +124,10 @@ function GameRouter(): JSX.Element {
   );
 }
 
-export default function App(): JSX.Element {
+export default function App(): ReactElement {
   useSocketBridge();
   return (
-    <div className="app bg-zinc-950 text-zinc-100">
+    <div className="app text-zinc-100">
       <div className="landscape-blocker">
         Поверни телефон обратно, самолёту нужен вертикальный взлёт ✈️
       </div>

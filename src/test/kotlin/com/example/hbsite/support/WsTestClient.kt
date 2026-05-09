@@ -79,7 +79,10 @@ class WsTestClient(
         val deadline = System.nanoTime() + timeout.toNanos()
         while (System.nanoTime() < deadline) {
             val match = received.firstOrNull(predicate)
-            if (match != null) return match
+            if (match != null) {
+                received.remove(match)
+                return match
+            }
             kotlinx.coroutines.delay(20)
         }
         error("Timed out waiting for WS event matching predicate. Got: ${received.toList().map { it.type }}")
